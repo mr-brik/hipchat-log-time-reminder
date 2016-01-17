@@ -1,0 +1,181 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use v5.10;
+
+=head1 NAME
+
+ews-generate-meetings
+
+=head1 DESCRIPTION
+
+Generates
+
+=head1 SYNOPSIS
+
+ews-generate-meetings [--number-of-days=<count>] [--server=<server>] [--domain=<domain>] [--user=<user>] [--filepath=<filepath>]
+
+=cut
+
+require File::Spec;
+my $FILEPATH = File::Spec->catfile( $ENV{'HOME'}, 'meetings.yaml' );
+my $NUMBER_OF_DAYS = 31;
+my ( $SERVER, $DOMAIN, $USER );
+my %long_opts = (
+  'number-of-days=i' => \$NUMBER_OF_DAYS,
+  'filepath=s'       => \$FILEPATH,
+  'domain=s'         => \$DOMAIN,
+  'user=s'           => \$USER,
+  'server=s'         => \$SERVER,
+);
+my $PASSWORD = $ENV{'PASSWORD'};
+
+my $USAGE = sprintf( 'USAGE: %s %s',
+  $0, join( ' ', map { sprintf( '[--%s]', $_ ) } sort keys %long_opts ) );
+
+require Getopt::Long;
+Getopt::Long::GetOptions(%long_opts) or die "Option error:$!\n$USAGE";
+
+if ( not $SERVER ) {
+  die "Server required" if not -t STDIN;
+  print "Server:";
+  chomp( $SERVER = <STDIN> );
+}
+if ( not $DOMAIN ) {
+  die "Domain required" if not -t STDIN;
+  print "Domain:";
+  chomp( $DOMAIN = <STDIN> );
+}
+if ( not $USER ) {
+  die "Username required" if not -t STDIN;
+  print "Username:";
+  chomp( $USER = <STDIN> );
+}
+if ( not $PASSWORD ) {
+  die "Password required" if not -t STDIN;
+  system( 'stty', '-echo' );
+  print "Password:";
+  chomp( $PASSWORD = <STDIN> );
+  system( 'stty', 'echo' );
+  print "\n";
+}
+
+require YAML;
+my $MEETING_DATA = {};
+if ( -e $FILEPATH ) {
+  $MEETING_DATA = YAML::LoadFile($FILEPATH);
+}
+
+my %EVENT_UID_CHOICE;
+my %EVENT_UID_STARLEAF;
+
+foreach my $date ( values %$MEETING_DATA ) {
+  foreach my $event (@$date) {
+    $EVENT_UID_CHOICE{ $event->{'uid'} }   = 1;
+    $EVENT_UID_STARLEAF{ $event->{'uid'} } = $event->{'starleaf'};
+  }
+}
+require EWS::Client;
+
+say "Connecting...";
+my $ews = EWS::Client->new(
+  {
+    server              => $SERVER,
+    username            => sprintf( '%s\\%s', $DOMAIN, $USER ),
+    password            => $PASSWORD,
+    use_negotiated_auth => 1
+  }
+);
+
+require DateTime;
+foreach my $evt (
+  @{
+    $ews->calendar->retrieve(
+      {
+        start => DateTime->now(),
+        end   => DateTime->now->add( days => $NUMBER_OF_DAYS ),
+      }
+    )->items
+  }
+  )
+{
+  next
+    if defined( $EVENT_UID_CHOICE{ $evt->UID } )
+    and $EVENT_UID_CHOICE{ $evt->UID } == 0;
+  next if $evt->IsAllDayEvent;
+
+  my ($starleaf);
+  if ( not defined( $EVENT_UID_CHOICE{ $evt->UID } ) ) {
+    next if not -t STDIN;
+    require Term::ANSIColor;
+    say(
+      sprintf(
+        q{%s ** Configure event ** %s},
+        Term::ANSIColor::color("bold"),
+        Term::ANSIColor::color("reset"),
+      )
+    );
+
+    say(
+      sprintf(
+        q{%sSubject:%s %s},
+        Term::ANSIColor::color("bold"), Term::ANSIColor::color("reset"),
+        $evt->Subject
+      )
+    );
+    say(
+      sprintf(
+        q{%sLocation:%s %s},
+        Term::ANSIColor::color("bold"), Term::ANSIColor::color("reset"),
+        $evt->Location
+      )
+    );
+    say(
+      sprintf(
+        q{%sTime:%s %s - %s (%s)},
+        Term::ANSIColor::color("bold"), Term::ANSIColor::color("reset"),
+        $evt->Start,                    $evt->End,
+        $evt->Start->time_zone_short_name
+      )
+    );
+    say(
+      sprintf( q{%sBody:%s %s},
+        Term::ANSIColor::color("bold"), Term::ANSIColor::color("reset"),
+        $evt->Body )
+    );
+    print "Add event [y/N]?";
+    my $yesno = <STDIN>;
+
+    if ( $yesno !~ m/^y/xsi ) {
+      say "Skipping...";
+      $EVENT_UID_CHOICE{ $evt->UID } = 0;
+      next;
+    }
+    $EVENT_UID_CHOICE{ $evt->UID } = 1;
+    print "Starleaf number:";
+    my $starleaf_input = <STDIN>;
+    if ( $starleaf_input =~ m/(?<starleaf>\d+)/xs ) {
+      $starleaf = $+{'starleaf'};
+      $EVENT_UID_STARLEAF{ $evt->UID } = $starleaf;
+    }
+    else {
+      say 'No starleaf?';
+    }
+
+  }
+  $starleaf ||= $EVENT_UID_STARLEAF{ $evt->UID };
+  $MEETING_DATA->{ $evt->Start->ymd } ||= [];
+  push @{ $MEETING_DATA->{ $evt->Start->ymd } },
+    {
+    starleaf  => $starleaf,
+    time_zone => $evt->Start->time_zone_short_name,
+    start     => $evt->Start->hms,
+    end       => $evt->End->hms,
+    location  => $evt->Location,
+    subject   => $evt->Subject,
+    uid       => $evt->UID,
+    };
+}
+
+YAML::DumpFile( $FILEPATH, $MEETING_DATA );
+

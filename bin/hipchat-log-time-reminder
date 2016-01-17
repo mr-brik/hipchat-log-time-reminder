@@ -1,0 +1,400 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use v5.10;
+use Readonly;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use utf8;    # inline unicode characters
+
+=head1 NAME
+
+hipchat-log-time-reminder
+
+=head1 DESCRIPTION
+
+A "Log your time" HipChat reminder inspired by Jame Green's [@jkg] version.
+
+=head1 SYNOPSIS
+
+hipchat-log-time-reminder [--version] [--help] [--verbose] [--test] [--room=<room>] [--dow=<1-7>] [--date=YYYY-MM-DD] [--message=<message>] [--config=<file>] [--option=<key:value>]
+
+=head1 ARGUMENTS
+
+=over
+
+=item --verbose
+
+Turns on verbose output; otherwise just warns out when notification fails.
+
+Default off.
+
+=item --test
+
+A test run, use test default options
+
+=item --version
+
+Prints version, then exits.
+
+=item --help
+
+Prints usage, then exits.
+
+=item --room=<room_name>
+
+Specifies the room to post to; room_name is the "pretty" room name.
+
+=item --config=<file>
+
+Specifies config file path. Defaults to "$HOME/.hipchat-log-time-rc.yaml".
+
+=item --date=YYYY-MM-DD
+
+Specifies the date in ISO8601 format. Defaults to current date.
+
+=item --dow=<Integer:1..7>
+
+Specifies the DOW to treat as 1==Monday, 2==Tuesday, ... 7==Sunday
+
+=item --message=<message_html>
+
+Specifies the message string in HTML format; otherwise falls back to default
+behaviour.
+
+=item --option=<keya.keyb.index0.keyc:value>
+
+Overrides config values using a flattened format. Multiple specifications
+allowed.
+
+=back
+
+=head1 ENVIRONMENT VARIABLES
+
+=over
+
+=item HIPCHAT_TOKEN
+
+HipChat API token to use. Needs to have 'Send Message' and 'Send Notifications'
+permissions. If not provided expects $HOME/hipchat.secure file containing the
+token in GPG encrypted form.
+
+=back
+
+=cut
+
+use WebService::HipChat;
+require File::Spec;
+
+Readonly::Scalar my $HOME_DIR =>
+  ( $ENV{'HOME'} // File::Spec->catfile( '/home', $ENV{'USER'} ) );
+Readonly::Scalar my $HIPCHAT_TOKEN_FILE =>
+  File::Spec->catfile( $HOME_DIR, 'hipchat.secure' );
+Readonly::Scalar my $GPG                       => '/usr/bin/gpg';
+Readonly::Scalar my $APP_VERSION               => 0.1;
+Readonly::Scalar my $LIVE_DEFAULT_HIPCHAT_ROOM => 'Dragon Team';
+Readonly::Scalar my $TEST_DEFAULT_HIPCHAT_ROOM => 'Quick Test';
+Readonly::Scalar my $TEST_DEFAULT_NOTIFY_MESSAGE =>
+  'Testing ... 1, 2, 3 .. Testing';
+Readonly::Scalar my $PERL_ADVENT_URL => 'http://perladvent.org';
+
+Readonly::Array my @DEFAULT_OFFICE_REGIONS => ( 'GB-EAW', 'RO-IS' );
+Readonly::Array my @DEFAULT_CONFIG_LOCATIONS => (
+  sprintf( '%s/../etc/config.yaml', $FindBin::Bin ),
+  sprintf( '%s/../etc/config.json', $FindBin::Bin ),
+  File::Spec->catfile( $HOME_DIR, '.hipchat-log-time-rc.yaml' ),
+  File::Spec->catfile( $HOME_DIR, '.hipchat-log-time-rc.json' )
+);
+
+Readonly::Array my @DEFAULT_MEETING_PATHS => (
+  sprintf( '%s/../etc/meetings.yaml', $FindBin::Bin ),
+  sprintf( '%s/../etc/meetings.json', $FindBin::Bin ),
+  File::Spec->catfile( $HOME_DIR, '.meetings.yaml' ),
+  File::Spec->catfile( $HOME_DIR, '.meetings.json' )
+);
+
+my $CONFIG_PATH = undef;
+my @CONFIG_OVERRIDES;
+my $VERBOSE               = 0;
+my $VERSION               = 0;
+my $HELP                  = 0;
+my $TEST_MODE             = 0;
+my $CHOSEN_HIPCHAT_ROOM   = undef;
+my $CHOSEN_NOTIFY_MESSAGE = undef;
+my $ISO_DATE              = undef;
+my $DOW                   = undef;
+my %long_opts             = (
+  "verbose"   => \$VERBOSE,
+  "version"   => \$VERSION,
+  "help"      => \$HELP,
+  "test"      => \$TEST_MODE,
+  "config=s"  => \$CONFIG_PATH,
+  "dow=s"     => \$DOW,
+  "date=s"    => \$ISO_DATE,
+  "room=s"    => \$CHOSEN_HIPCHAT_ROOM,
+  "message=s" => \$CHOSEN_NOTIFY_MESSAGE,
+  "option=s"  => \@CONFIG_OVERRIDES,
+);
+my $USAGE = sprintf( 'USAGE: %s %s',
+  $0, join( ' ', map { sprintf( '[--%s]', $_ ) } sort keys %long_opts ) );
+
+require Getopt::Long;
+Getopt::Long::GetOptions(%long_opts) or die "Option error:$!\n$USAGE";
+
+if ($HELP) {
+  say $USAGE;
+  say sprintf( 'Version: %s', $APP_VERSION );
+  exit 0;
+}
+
+if ($VERSION) {
+  say sprintf( 'Version: %s', $APP_VERSION );
+  exit 0;
+}
+
+my $HIPCHAT_TOKEN = $ENV{'HIPCHAT_TOKEN'};
+if ( not $HIPCHAT_TOKEN ) {
+  open(
+    my $hipchat_secure_fh,
+    "-|", $GPG, "--homedir", File::Spec->catfile( $HOME_DIR, ".gnupg" ),
+    "-q", "-d", $HIPCHAT_TOKEN_FILE
+  ) or die sprintf( 'Unable to retrieve config: %s', $! );
+  $HIPCHAT_TOKEN = <$hipchat_secure_fh>;
+  close $hipchat_secure_fh;
+}
+
+my $hc = WebService::HipChat->new( auth_token => $HIPCHAT_TOKEN );
+
+require DateTime;
+require Time::Piece;
+my $DT =
+  $ISO_DATE
+  ? DateTime->from_epoch(
+  epoch => Time::Piece->strptime( $ISO_DATE, '%Y-%m-%d' )->epoch )
+  : DateTime->now;
+$DOW //= $DT->dow;
+
+require Config::Any;
+my @config_paths = $CONFIG_PATH ? ($CONFIG_PATH) : @DEFAULT_CONFIG_LOCATIONS;
+my ($config) =
+  @{ Config::Any->load_files( { files => \@config_paths, use_ext => 1, } ) };
+my ( $config_filename, $config_h ) = $config ? %$config : ( undef, {} );
+
+my ($meetings) = @{ Config::Any->load_files(
+    { files => \@DEFAULT_MEETING_PATHS, use_ext => 1, }
+  )
+};
+my ( $meetings_filename, $meetings_h ) = $meetings ? %$meetings : ( undef, {} );
+
+foreach my $config_override (@CONFIG_OVERRIDES) {
+  die sprintf( 'Invalid option: %s', $config_override )
+    if $config_override !~ m/^[^.:]+(?:[.][^.:]+)[:][^:]+$/msx;
+  my ( $flat_key, $value ) = split( ':', $config_override );
+  my @flat_key_parts = split( '.', $flat_key );
+
+  # XXX relies on disallowed ':' to avoid code execution vulns
+  my $eval_string = '$config_h';
+  foreach my $fkp (@flat_key_parts) {
+    if ( $fkp =~ m/^\d+$/msx ) {
+
+      # array index
+      $eval_string .= sprintf( '->[%d]', $fkp );
+    }
+    else {
+      # hash key
+      $eval_string .= sprintf( '->{q:%s:}', $fkp );
+    }
+  }
+  $eval_string .= sprintf( '=q:%s:', $value );
+  eval $eval_string;
+  warn $@ if $@;
+}
+
+my @DEFAULT_DOW_NOTIFICATIONS = (
+  {
+    'message' =>
+'Elvis is throwing the party in the county jail as you have not logged enough time.',
+    'color' => 'purple',
+    'image_uri' =>
+'https://upload.wikimedia.org/wikipedia/commons/e/ed/Elvis_Presley_Jailhouse_Rock3.jpg',
+  },
+  {
+    'message' => 'Ziggy fell to earth because of lack of logged time.',
+    'color'   => 'red',
+    'image_uri' =>
+'https://upload.wikimedia.org/wikipedia/commons/2/2c/David_Bowie_-_TopPop_1974_10.png',
+  },
+  {
+    'message' =>
+      'Spongebob and Patrick are on a mission to ensure everyone logs time.',
+    'color' => 'random',
+    'image_uri' =>
+      'https://c2.staticflickr.com/6/5333/8866614909_d148b75c3a_n.jpg',
+  },
+  {
+    'message' =>
+      'Freddie is under pressure to ensure everyone logs their time.',
+    'color' => 'yellow',
+    'image_uri' =>
+      'https://farm4.staticflickr.com/3401/3479284116_086cded5e2_o_d.jpg',
+  },
+  {
+    'message' =>
+      'Obama is disappointed; executive action taken to address logged time.',
+    'color' => 'green',
+    'image_uri' =>
+'http://i2.cdn.turner.com/cnnnext/dam/assets/160105122318-obama-crying-gun-executive-action-sot-00004809-large-169.jpg',
+  },
+
+);
+
+my ($current_timed_theme) =
+  map { $_->{'theme'} }
+  grep { $_->{'start_date'} le $DT->ymd and $_->{'end_date'} ge $DT->ymd }
+  @{ $config_h->{'timed_themes'} || [] };
+
+my $effective_theme = $current_timed_theme // $config_h->{'theme'} // 'default';
+my $base_dow_notifications =
+    $config_h->{$effective_theme}->{'dow_notifications'}
+  ? $config_h->{$effective_theme}->{'dow_notifications'}
+  : $config_h->{'dow_notifications'} // \@DEFAULT_DOW_NOTIFICATIONS;
+
+my $dow_notifications = [ map { @$base_dow_notifications } ( 1 .. 7 ) ];
+
+my $live_hipchat_room = $config_h->{'live_hipchat_room'}
+  // $LIVE_DEFAULT_HIPCHAT_ROOM;
+my $test_hipchat_room = $config_h->{'test_hipchat_room'}
+  // $TEST_DEFAULT_HIPCHAT_ROOM;
+
+my $hipchat_room = $CHOSEN_HIPCHAT_ROOM
+  // ( $TEST_MODE ? $test_hipchat_room : $live_hipchat_room );
+
+my $chosen_notify = $config_h->{'timed_notifications'}{ $DT->ymd }
+  // $dow_notifications->[ $DOW - 1 ]
+  // ( $TEST_MODE ? { 'message' => $TEST_DEFAULT_HIPCHAT_ROOM, } : undef );
+die "No appropriate notification" if not $chosen_notify;
+
+my ($local_image_path);
+if ( $chosen_notify->{'image_uri'} ) {
+  require HipChatLogTime::Image::Download;
+  ($local_image_path) = HipChatLogTime::Image::Download->new(
+    image_uri    => $chosen_notify->{'image_uri'},
+    download_dir => ( $config_h->{'local_image_dir'} // '.' ),
+  )->local_path;
+}
+
+require File::Basename;
+$chosen_notify->{'image_uri'} = sprintf( '%s/%s',
+  $config_h->{'base_image_url'},
+  File::Basename::basename($local_image_path) )
+  if $local_image_path and $config_h->{'base_image_url'};
+
+my $file_upload_in_use =
+  ( $local_image_path and not $config_h->{'base_image_url'} ) ? 1 : 0;
+
+if ( $chosen_notify->{'image_uri'} ) {
+  if ($file_upload_in_use) {
+
+    # upload
+    $chosen_notify->{'message'} =
+      sprintf( '<strong>%s</strong>', $chosen_notify->{'message'} );
+
+  }
+  else {
+    $chosen_notify->{'message'} = sprintf(
+      '<img src="%s" /><br /><strong>%s</strong>',
+      $chosen_notify->{'image_uri'},
+      $chosen_notify->{'message'}
+    );
+  }
+}
+
+if ( $DT->month() == 12 and $DT->day() < 25 ) {
+  require XML::Feed;
+  my ($feed)       = XML::Feed->find_feeds($PERL_ADVENT_URL);
+  my ($last_entry) = XML::Feed->parse( URI->new($feed) )->entries;
+  require HTML::Entities;
+  $chosen_notify->{'message'} .= sprintf(
+q{<br />When you have time, check out today's Perl Advent: <a href="%s">%s</a>},
+    HTML::Entities::encode( $last_entry->link ),
+    HTML::Entities::encode( $last_entry->title )
+  );
+}
+
+if ( $meetings_h->{ $DT->ymd } ) {
+  $chosen_notify->{'message'} .= q{<br /><br /><strong>Schedule</strong>};
+  foreach my $m ( @{ $meetings_h->{ $DT->ymd } } ) {
+    $chosen_notify->{'message'} .= sprintf( q{<br />%s - %s %s},
+      $m->{'start'}, $m->{'end'}, $m->{'subject'} );
+    $chosen_notify->{'message'} .=
+      sprintf( q{ (StarLeaf:%d)}, $m->{'starleaf'} )
+      if $m->{'starleaf'};
+  }
+}
+
+my @current_holidays;
+
+my $office_regions = $config_h->{'office_regions'} // [@DEFAULT_OFFICE_REGIONS];
+foreach my $office_iso (@$office_regions) {
+  my ( $office_cc, $office_rc ) = split( '-', $office_iso );
+  require Date::Holidays;
+  next if not $office_cc;
+  my $dh = Date::Holidays->new( countrycode => $office_cc );
+  warn "Unable to get Date::Holidays object for $office_cc, skipping." and next
+    if not $dh;
+  my $holiday_name = $dh->is_holiday(
+    year  => $DT->year,
+    month => $DT->month,
+    day   => $DT->day,
+    ( $office_rc ? ( regions => [$office_rc], ) : () ),
+  );
+  next if not $holiday_name;
+  push @current_holidays,
+    {
+    region_code  => $office_rc,
+    country_code => $office_cc,
+    name         => $holiday_name,
+    };
+}
+
+if (@current_holidays) {
+  my ($display_holiday_name) = $current_holidays[0]->{'name'};
+  if ( scalar(@current_holidays) == scalar(@$office_regions) ) {
+    $chosen_notify->{'message'} =
+      sprintf( '%s. No stand-up today \( ﾟヮﾟ)/', $display_holiday_name );
+  }
+  else {
+    my %holiday_countries;
+    $holiday_countries{$_} = 1
+      for map { $_->{'country_code'} } @current_holidays;
+    $chosen_notify->{'message'} .= sprintf(
+      '<br />Public Holiday (%s): %s',
+
+      # assuming no regional variations
+      join( '/', sort keys %holiday_countries ),
+      $display_holiday_name
+    );
+  }
+
+}
+
+if ($CHOSEN_NOTIFY_MESSAGE) {
+
+  # override with specified
+  $chosen_notify->{'message'} = $CHOSEN_NOTIFY_MESSAGE;
+}
+
+$chosen_notify->{'notify'} ||= 'true';
+
+require HTML::FormatText;
+$file_upload_in_use
+  ? $hc->share_file(
+  $hipchat_room,
+  {
+    message =>
+      HTML::FormatText->format_string( $chosen_notify->{'message'}, lm => 0 ),
+    file => $local_image_path
+  },
+  )
+  : $hc->send_notification( $hipchat_room, $chosen_notify, );

@@ -1,0 +1,8 @@
+---
+dow_notifications:
+  - color: purple
+    image_uri: "https://c2.staticflickr.com/4/3073/3252530853_c093de3372.jpg" 
+    message: "Snowman is melting because you have not logged enough time."
+  - color: red
+    image_uri: "https://c1.staticflickr.com/9/8496/8303412522_2ed7255b94_b.jpg"
+    message: "Santa has put you on the naughty list because you have not logged enough time."
