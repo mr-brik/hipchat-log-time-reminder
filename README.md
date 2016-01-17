@@ -125,7 +125,17 @@ make install
 
 - [MIME::Types](https://metacpan.org/pod/MIME::Types)
 
+- [Moose](https://metacpan.org/pod/Moose)
+
+- [Readonly](https://metacpan.org/pod/Readonly)
+
 - [Term::ANSIColor](https://metacpan.org/pod/Term::ANSIColor)
+
+- [Test::Fatal](https://metacpan.org/pod/Test::Fatal)
+
+- [Test::More](https://metacpan.org/pod/Test::More)
+
+- [Test::Most](https://metacpan.org/pod/Test::Most)
 
 - [Time::Piece](https://metacpan.org/pod/Time::Piece)
 
