@@ -330,7 +330,8 @@ if ( $DOW == 1 ) {
       ->in_units("weeks") + 1 );
   require WWW::Mechanize;
   my $pw_mech = WWW::Mechanize->new;
-  $pw_mech->get($pw_url);
+  eval{ $pw_mech->get($pw_url) };
+  warn $@ if $@;
   if ( $pw_mech->success and $pw_mech->title ) {
     $chosen_notify->{'message'} .=
       sprintf( q{<br /><a href="%s">%s</a>}, $pw_url, $pw_mech->title );

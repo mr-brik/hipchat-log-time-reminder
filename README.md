@@ -141,6 +141,8 @@ make install
 
 - [WebService::HipChat](https://metacpan.org/pod/WebService::HipChat)
 
+- [WWW::Mechanize](https://metacpan.org/pod/WWW::Mechanize)
+
 - [XML::Feed](https://metacpan.org/pod/XML::Feed)
 
 - [YAML](https://metacpan.org/pod/YAML)
