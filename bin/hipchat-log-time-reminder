@@ -322,6 +322,21 @@ q{<br />When you have time, check out today's Perl Advent: <a href="%s">%s</a>},
   );
 }
 
+if ( $DOW == 1 ) {
+
+  # http://perlweekly.com/archive/<i>.html since 2011-08-01 (1312156800)
+  my $pw_url = sprintf( 'http://perlweekly.com/archive/%d.html',
+    DateTime->from_epoch( epoch => 1312156800 )->delta_days($DT)
+      ->in_units("weeks") + 1 );
+  require WWW::Mechanize;
+  my $pw_mech = WWW::Mechanize->new;
+  $pw_mech->get($pw_url);
+  if ( $pw_mech->success and $pw_mech->title ) {
+    $chosen_notify->{'message'} .=
+      sprintf( q{<br /><a href="%s">%s</a>}, $pw_url, $pw_mech->title );
+  }
+}
+
 if ( $meetings_h->{ $DT->ymd } ) {
   $chosen_notify->{'message'} .= q{<br /><br /><strong>Schedule</strong>};
   foreach my $m ( @{ $meetings_h->{ $DT->ymd } } ) {
