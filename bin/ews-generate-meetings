@@ -165,6 +165,9 @@ foreach my $evt (
   }
   $starleaf ||= $EVENT_UID_STARLEAF{ $evt->UID };
   $MEETING_DATA->{ $evt->Start->ymd } ||= [];
+  next
+    if grep { $evt->UID eq $_->{'uid'} }
+    @{ $MEETING_DATA->{ $evt->Start->ymd } };
   push @{ $MEETING_DATA->{ $evt->Start->ymd } },
     {
     starleaf  => $starleaf,
@@ -175,6 +178,19 @@ foreach my $evt (
     subject   => $evt->Subject,
     uid       => $evt->UID,
     };
+}
+
+# sanitise any odd data
+foreach my $ymd ( keys %$MEETING_DATA ) {
+  my $orig_meeting_list = $MEETING_DATA->{$ymd};
+  my ( %seen_uid_c, @tmp_meeting_list );
+  foreach
+    my $meeting ( sort { $a->{'start'} cmp $b->{'start'} } @$orig_meeting_list )
+  {
+    next if $seen_uid_c{ $meeting->{'uid'} }++ != 0;
+    push @tmp_meeting_list, $meeting;
+  }
+  $MEETING_DATA->{$ymd} = \@tmp_meeting_list;
 }
 
 YAML::DumpFile( $FILEPATH, $MEETING_DATA );

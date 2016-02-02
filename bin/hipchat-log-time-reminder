@@ -316,7 +316,8 @@ if ( $DT->month() == 12 and $DT->day() < 25 ) {
   my ($last_entry) = XML::Feed->parse( URI->new($feed) )->entries;
   require HTML::Entities;
   $chosen_notify->{'message'} .= sprintf(
-q{<br />When you have time, check out today's Perl Advent: <a href="%s">%s</a>},
+    "\n"
+      . q{<br />When you have time, check out today's Perl Advent: <a href="%s">%s</a>},
     HTML::Entities::encode( $last_entry->link ),
     HTML::Entities::encode( $last_entry->title )
   );
@@ -330,18 +331,20 @@ if ( $DOW == 1 ) {
       ->in_units("weeks") + 1 );
   require WWW::Mechanize;
   my $pw_mech = WWW::Mechanize->new;
-  eval{ $pw_mech->get($pw_url) };
+  eval { $pw_mech->get($pw_url) };
   warn $@ if $@;
   if ( $pw_mech->success and $pw_mech->title ) {
     $chosen_notify->{'message'} .=
-      sprintf( q{<br /><a href="%s">%s</a>}, $pw_url, $pw_mech->title );
+      sprintf( "\n" . q{<br /><a href="%s">%s</a>}, $pw_url, $pw_mech->title );
   }
 }
 
 if ( $meetings_h->{ $DT->ymd } ) {
-  $chosen_notify->{'message'} .= q{<br /><br /><strong>Schedule</strong>};
+  $chosen_notify->{'message'} .=
+    "\n\n" . q{<br /><br /><strong>Schedule</strong>};
   foreach my $m ( @{ $meetings_h->{ $DT->ymd } } ) {
-    $chosen_notify->{'message'} .= sprintf( q{<br />%s - %s %s},
+    $chosen_notify->{'message'} .= "\n"
+      . sprintf( q{<br />%s - %s %s},
       $m->{'start'}, $m->{'end'}, $m->{'subject'} );
     $chosen_notify->{'message'} .=
       sprintf( q{ (StarLeaf:%d)}, $m->{'starleaf'} )
