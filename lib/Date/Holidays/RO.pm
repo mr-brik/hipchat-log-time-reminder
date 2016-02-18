@@ -237,7 +237,6 @@ __DATA__
 2016-01-01	*	New Year's Day
 2016-01-02	*	Day after New Year's Day
 2016-01-24	*	Unification Day
-2016-02-19	*	Constantin Brancusi Day
 2016-05-01	*	Labor Day / May Day
 2016-05-01	*	Orthodox Easter Day
 2016-05-02	*	Orthodox Easter Monday
