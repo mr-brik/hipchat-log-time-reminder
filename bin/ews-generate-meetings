@@ -13,20 +13,22 @@ Generates
 
 =head1 SYNOPSIS
 
-ews-generate-meetings [--number-of-days=<count>] [--server=<server>] [--domain=<domain>] [--user=<user>] [--filepath=<filepath>]
+ews-generate-meetings [--number-of-days=<count>] [--server=<server>] [--domain=<domain>] [--user=<user>] [--filepath=<filepath>] [--use-negotiated-auth]
 
 =cut
 
 require File::Spec;
-my $FILEPATH = File::Spec->catfile( $ENV{'HOME'}, 'meetings.yaml' );
-my $NUMBER_OF_DAYS = 31;
+my $FILEPATH            = File::Spec->catfile( $ENV{'HOME'}, 'meetings.yaml' );
+my $NUMBER_OF_DAYS      = 31;
+my $USE_NEGOTIATED_AUTH = 0;
 my ( $SERVER, $DOMAIN, $USER );
 my %long_opts = (
-  'number-of-days=i' => \$NUMBER_OF_DAYS,
-  'filepath=s'       => \$FILEPATH,
-  'domain=s'         => \$DOMAIN,
-  'user=s'           => \$USER,
-  'server=s'         => \$SERVER,
+  'number-of-days=i'    => \$NUMBER_OF_DAYS,
+  'filepath=s'          => \$FILEPATH,
+  'domain=s'            => \$DOMAIN,
+  'user=s'              => \$USER,
+  'server=s'            => \$SERVER,
+  'use-negotiated-auth' => \$USE_NEGOTIATED_AUTH,
 );
 my $PASSWORD = $ENV{'PASSWORD'};
 
@@ -83,7 +85,7 @@ my $ews = EWS::Client->new(
     server              => $SERVER,
     username            => sprintf( '%s\\%s', $DOMAIN, $USER ),
     password            => $PASSWORD,
-    use_negotiated_auth => 1
+    use_negotiated_auth => $USE_NEGOTIATED_AUTH,
   }
 );
 
