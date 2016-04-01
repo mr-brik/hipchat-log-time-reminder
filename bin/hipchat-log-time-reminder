@@ -340,8 +340,12 @@ if ( $DOW == 1 ) {
 }
 
 if ( $meetings_h->{ $DT->ymd } ) {
-  $chosen_notify->{'message'} .=
-    "\n\n" . q{<br /><br /><strong>Schedule</strong>};
+  $chosen_notify->{'message'} .= "\n\n"
+    . sprintf( q{<br /><br /><strong>Schedule [%s]</strong>},
+ # XXX No timezone information tracked meetings data - currently *always* UTC
+ # DateTime->time_zone_short_name() just a placeholder for now.
+    $DT->time_zone_short_name );
+
   foreach my $m ( @{ $meetings_h->{ $DT->ymd } } ) {
     $chosen_notify->{'message'} .= "\n"
       . sprintf( q{<br />%s - %s %s},
