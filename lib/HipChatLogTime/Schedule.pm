@@ -52,7 +52,7 @@ sub _build_tasks {
       require DateTime::Format::Strptime;
       my $dt_parser = DateTime::Format::Strptime->new(
         pattern   => q{%F %T},
-        time_zone => "UTC"
+        time_zone => ( $task->{'time_zone'} // "UTC" )
       );
       my $start_dt = $dt_parser->parse_datetime(
         sprintf( '%s %s', $start_date, $task->{'start'} ) )
