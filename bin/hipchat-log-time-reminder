@@ -360,8 +360,9 @@ my $schedule_tz = $config->{'schedule_tz'} // $common_office_tz // $DEFAULT_TZ;
 
 require HipChatLogTime::Schedule;
 my $schedule = HipChatLogTime::Schedule->new(
-  time_zone => $schedule_tz,
-  data      => $meetings_h,
+  from_epoch => $DT->epoch,
+  time_zone  => $schedule_tz,
+  data       => $meetings_h,
 );
 
 if ( $schedule->today_tasks ) {

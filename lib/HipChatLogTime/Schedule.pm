@@ -17,10 +17,19 @@ has 'now' => (
   builder => '_build_now',
 );
 
+has 'from_epoch' => (
+  is      => 'ro',
+);
+
 sub _build_now {
   my ($self) = @_;
   require DateTime;
-  return DateTime->now( time_zone => $self->time_zone );
+  return $self->from_epoch
+    ? DateTime->from_epoch(
+    time_zone => $self->time_zone,
+    epoch     => $self->from_epoch
+    )
+    : DateTime->now( time_zone => $self->time_zone );
 }
 
 has 'time_zone' => (
@@ -79,8 +88,8 @@ sub _build_today_tasks {
   my ($self) = @_;
   return if not $self->tasks;
   return [ grep {
-    $self->now->clone->truncate( to => 'day' ) eq
-      $_->start->clone->truncate( to => 'day' )
+    $self->now->clone->ymd eq
+      $_->start->clone->ymd
   } @{ $self->tasks } ];
 }
 
