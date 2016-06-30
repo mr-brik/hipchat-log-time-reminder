@@ -356,7 +356,7 @@ if ( scalar( keys %office_tz ) == 1 ) {
   ($common_office_tz) = keys %office_tz;
 }
 
-my $schedule_tz = $config->{'schedule_tz'} // $common_office_tz // $DEFAULT_TZ;
+my $schedule_tz = $config_h->{'schedule_tz'} // $common_office_tz // $DEFAULT_TZ;
 
 require HipChatLogTime::Schedule;
 my $schedule = HipChatLogTime::Schedule->new(
