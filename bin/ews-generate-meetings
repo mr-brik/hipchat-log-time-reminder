@@ -69,12 +69,13 @@ if ( -e $FILEPATH ) {
 }
 
 my %EVENT_UID_CHOICE;
-my %EVENT_UID_STARLEAF;
+my %EVENT_UID_VIDEO_CONFERENCE;
 
 foreach my $date ( values %$MEETING_DATA ) {
   foreach my $event (@$date) {
-    $EVENT_UID_CHOICE{ $event->{'uid'} }   = 1;
-    $EVENT_UID_STARLEAF{ $event->{'uid'} } = $event->{'starleaf'};
+    $EVENT_UID_CHOICE{ $event->{'uid'} } = 1;
+    $EVENT_UID_VIDEO_CONFERENCE{ $event->{'uid'} } =
+      $event->{'video_conference'};
   }
 }
 require EWS::Client;
@@ -106,7 +107,7 @@ foreach my $evt (
     and $EVENT_UID_CHOICE{ $evt->UID } == 0;
   next if $evt->IsAllDayEvent;
 
-  my ($starleaf);
+  my ($video_conference);
   if ( not defined( $EVENT_UID_CHOICE{ $evt->UID } ) ) {
     next if not -t STDIN;
     require Term::ANSIColor;
@@ -154,31 +155,31 @@ foreach my $evt (
       next;
     }
     $EVENT_UID_CHOICE{ $evt->UID } = 1;
-    print "Starleaf number:";
-    my $starleaf_input = <STDIN>;
-    if ( $starleaf_input =~ m/(?<starleaf>\d+)/xs ) {
-      $starleaf = $+{'starleaf'};
-      $EVENT_UID_STARLEAF{ $evt->UID } = $starleaf;
+    print "Video conference number or URL:";
+    my $video_conference_input = <STDIN>;
+    if ( $video_conference_input =~ m/(?<video_conference>\d+)/xs ) {
+      $video_conference = $+{'video_conference'};
+      $EVENT_UID_VIDEO_CONFERENCE{ $evt->UID } = $video_conference;
     }
     else {
-      say 'No starleaf?';
+      say 'No video_conference?';
     }
 
   }
-  $starleaf ||= $EVENT_UID_STARLEAF{ $evt->UID };
+  $video_conference ||= $EVENT_UID_VIDEO_CONFERENCE{ $evt->UID };
   $MEETING_DATA->{ $evt->Start->ymd } ||= [];
   next
     if grep { $evt->UID eq $_->{'uid'} }
     @{ $MEETING_DATA->{ $evt->Start->ymd } };
   push @{ $MEETING_DATA->{ $evt->Start->ymd } },
     {
-    starleaf  => $starleaf,
-    time_zone => $evt->Start->time_zone_short_name,
-    start     => $evt->Start->hms,
-    end       => $evt->End->hms,
-    location  => $evt->Location,
-    subject   => $evt->Subject,
-    uid       => $evt->UID,
+    video_conference => $video_conference,
+    time_zone        => $evt->Start->time_zone_short_name,
+    start            => $evt->Start->hms,
+    end              => $evt->End->hms,
+    location         => $evt->Location,
+    subject          => $evt->Subject,
+    uid              => $evt->UID,
     };
 }
 

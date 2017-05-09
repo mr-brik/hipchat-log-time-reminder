@@ -23,7 +23,7 @@ has 'subject' => (
 
 has 'location' => ( is => 'rw' );
 
-has 'starleaf' => ( is => 'rw' );
+has 'video_conference' => ( is => 'rw' );
 
 has 'data' => ( is => 'rw', );
 

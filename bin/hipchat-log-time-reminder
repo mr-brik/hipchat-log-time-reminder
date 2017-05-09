@@ -99,9 +99,9 @@ Readonly::Scalar my $TEST_DEFAULT_NOTIFY_MESSAGE =>
   'Testing ... 1, 2, 3 .. Testing';
 Readonly::Scalar my $PERL_ADVENT_URL => 'http://perladvent.org';
 
-Readonly::Scalar my $DEFAULT_TZ              => 'UTC';
+Readonly::Scalar my $DEFAULT_TZ => 'UTC';
 
-Readonly::Array my @DEFAULT_OFFICE_REGIONS   => ( 'GB-EAW', 'RO-IS' );
+Readonly::Array my @DEFAULT_OFFICE_REGIONS => ( 'GB-EAW', 'RO-IS' );
 Readonly::Array my @DEFAULT_CONFIG_LOCATIONS => (
   sprintf( '%s/../etc/config.yaml', $FindBin::Bin ),
   sprintf( '%s/../etc/config.json', $FindBin::Bin ),
@@ -356,7 +356,8 @@ if ( scalar( keys %office_tz ) == 1 ) {
   ($common_office_tz) = keys %office_tz;
 }
 
-my $schedule_tz = $config_h->{'schedule_tz'} // $common_office_tz // $DEFAULT_TZ;
+my $schedule_tz = $config_h->{'schedule_tz'} // $common_office_tz
+  // $DEFAULT_TZ;
 
 require HipChatLogTime::Schedule;
 my $schedule = HipChatLogTime::Schedule->new(
@@ -375,8 +376,8 @@ if ( $schedule->today_tasks ) {
       . sprintf( q{<br />%s - %s %s},
       $m->start->time, $m->end->time, $m->subject );
     $chosen_notify->{'message'} .=
-      sprintf( q{ (StarLeaf:%d)}, $m->starleaf )
-      if $m->starleaf;
+      sprintf( q{ (Conference:%d)}, $m->video_conference )
+      if $m->video_conference;
   }
 }
 

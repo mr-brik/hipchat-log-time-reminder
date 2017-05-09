@@ -17,9 +17,7 @@ has 'now' => (
   builder => '_build_now',
 );
 
-has 'from_epoch' => (
-  is      => 'ro',
-);
+has 'from_epoch' => ( is => 'ro', );
 
 sub _build_now {
   my ($self) = @_;
@@ -66,12 +64,12 @@ sub _build_tasks {
       require HipChatLogTime::Schedule::Item;
       push @tasks,
         HipChatLogTime::Schedule::Item->new(
-        start    => $start_dt,
-        end      => $end_dt,
-        subject  => $task->{'subject'},
-        starleaf => $task->{'starleaf'},
-        location => $task->{'location'},
-        data     => $task
+        start            => $start_dt,
+        end              => $end_dt,
+        subject          => $task->{'subject'},
+        video_conference => $task->{'video_conference'},
+        location         => $task->{'location'},
+        data             => $task
         );
     }
   }
@@ -87,10 +85,8 @@ has 'today_tasks' => (
 sub _build_today_tasks {
   my ($self) = @_;
   return if not $self->tasks;
-  return [ grep {
-    $self->now->clone->ymd eq
-      $_->start->clone->ymd
-  } @{ $self->tasks } ];
+  return [ grep { $self->now->clone->ymd eq $_->start->clone->ymd }
+      @{ $self->tasks } ];
 }
 
 __PACKAGE__->meta->make_immutable;
