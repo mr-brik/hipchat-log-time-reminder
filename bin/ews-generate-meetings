@@ -155,9 +155,9 @@ foreach my $evt (
       next;
     }
     $EVENT_UID_CHOICE{ $evt->UID } = 1;
-    print "Video conference number or URL:";
+    print "Video conference number:";
     my $video_conference_input = <STDIN>;
-    if ( $video_conference_input =~ m/(?<video_conference>\S+)/xs ) {
+    if ( $video_conference_input =~ m/(?<video_conference>\d+)/xs ) {
       $video_conference = $+{'video_conference'};
       $EVENT_UID_VIDEO_CONFERENCE{ $evt->UID } = $video_conference;
     }
