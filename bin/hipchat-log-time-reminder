@@ -376,7 +376,7 @@ if ( $schedule->today_tasks ) {
       . sprintf( q{<br />%s - %s %s},
       $m->start->time, $m->end->time, $m->subject );
     $chosen_notify->{'message'} .=
-      sprintf( q{ (Conference:%d)}, $m->video_conference )
+      sprintf( q{ (Conference:%s)}, $m->video_conference )
       if $m->video_conference;
   }
 }
